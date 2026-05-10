@@ -2219,18 +2219,21 @@ function attachSwipeToDismiss(panel, closeFn) {
   panel.addEventListener("touchend", onEnd)
   panel.addEventListener("touchcancel", onCancel)
 
-  // Mouse events (desktop)
-  panel.addEventListener("mousedown", (e) => {
-    onStart(e.clientY, e.target)
-    const onMouseMove = (e) => onMove(e.clientY, null)
-    const onMouseUp = () => {
-      onEnd()
-      document.removeEventListener("mousemove", onMouseMove)
-      document.removeEventListener("mouseup", onMouseUp)
-    }
-    document.addEventListener("mousemove", onMouseMove)
-    document.addEventListener("mouseup", onMouseUp)
-  })
+  // Mouse events (desktop) — only trigger from grabber area
+  if (grabber) {
+    grabber.addEventListener("mousedown", (e) => {
+      e.preventDefault()
+      onStart(e.clientY, grabber)
+      const onMouseMove = (ev) => onMove(ev.clientY, null)
+      const onMouseUp = () => {
+        onEnd()
+        document.removeEventListener("mousemove", onMouseMove)
+        document.removeEventListener("mouseup", onMouseUp)
+      }
+      document.addEventListener("mousemove", onMouseMove)
+      document.addEventListener("mouseup", onMouseUp)
+    })
+  }
 }
 
 function initSwipeToDismiss() {
