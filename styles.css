@@ -1789,14 +1789,14 @@ body {
   border-radius: 14px;
 }
 
-@media (min-width: 860px) {
+@media (min-width: 940px) {
   body {
     padding: 28px 24px;
   }
 
   .app-shell {
     display: grid;
-    grid-template-columns: minmax(560px, 680px) minmax(300px, 340px);
+    grid-template-columns: 1fr minmax(300px, 340px);
     gap: 22px;
     align-items: start;
     max-width: 1080px;
@@ -1856,7 +1856,7 @@ body {
   }
 }
 
-@media (max-width: 859px) {
+@media (max-width: 939px) {
   .app-shell {
     width: calc(100vw - 32px);
     max-width: calc(100vw - 32px);
