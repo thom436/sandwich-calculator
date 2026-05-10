@@ -1203,19 +1203,24 @@ input[type="checkbox"]:active {
 
 @media (prefers-color-scheme: dark) {
   body {
-    background: #000000;
+    background:
+      radial-gradient(circle at 72% 42%, rgba(85,144,105,0.28) 0%, rgba(85,144,105,0.14) 18%, rgba(85,144,105,0) 38%),
+      radial-gradient(circle at 78% 92%, rgba(198,181,42,0.2) 0%, rgba(198,181,42,0.1) 16%, rgba(198,181,42,0) 34%),
+      linear-gradient(145deg, #070a0f 0%, #0b1119 44%, #030507 100%);
     color: #F2F2F7;
-    --kcal-muted: #8E8E93;
-    --glass-bg: rgba(28,28,30,0.96);
-    --glass-border: rgba(255,255,255,0.12);
-    --glass-highlight: rgba(255,255,255,0.06);
-    --glass-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    --glass-blur: 0px;
-    --glass-sat: 100%;
+    --kcal-muted: rgba(186,191,202,0.76);
+    --glass-bg: rgba(54,62,74,0.42);
+    --glass-border: rgba(221,232,246,0.24);
+    --glass-highlight: rgba(255,255,255,0.18);
+    --glass-shadow: 0 18px 46px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.18);
+    --glass-blur: 30px;
+    --glass-sat: 145%;
   }
 
   .card {
-    background: var(--glass-bg);
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 42%, rgba(118,150,172,0.1) 100%),
+      var(--glass-bg);
     border: 1px solid var(--glass-border);
     border-radius: 28px;
     box-shadow: var(--glass-shadow);
@@ -1344,12 +1349,14 @@ input[type="checkbox"]:active {
   }
 
   .picker-field {
-    background: #2C2C2E !important;
-    color: rgba(242,242,247,0.92) !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    box-shadow: none !important;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 52%, rgba(144,169,188,0.08) 100%),
+      rgba(57,61,70,0.36) !important;
+    color: rgba(242,242,247,0.94) !important;
+    border: 1px solid rgba(230,238,250,0.22) !important;
+    backdrop-filter: blur(28px) saturate(145%) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(145%) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 30px rgba(0,0,0,0.16) !important;
   }
 
   .picker-field:not(.picker-field--plus)::after {
@@ -1376,9 +1383,11 @@ input[type="checkbox"]:active {
   }
 
   .picker-field.picker-field--plus {
-    background: #2C2C2E !important;
-    border-color: rgba(255,255,255,0.1) !important;
-    box-shadow: none !important;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 52%, rgba(144,169,188,0.08) 100%),
+      rgba(57,61,70,0.34) !important;
+    border-color: rgba(230,238,250,0.22) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 30px rgba(0,0,0,0.16) !important;
   }
 
   .footer-detail {
@@ -1877,20 +1886,28 @@ body {
   .icon-symbol-btn,
   .reset-btn,
   .result-copy-btn {
-    background: #2C2C2E;
-    border-color: rgba(255,255,255,0.12);
+    background: rgba(74,78,88,0.44);
+    border-color: rgba(230,238,250,0.22);
     color: #F2F2F7;
-    box-shadow: none;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 12px 28px rgba(0,0,0,0.28);
+    backdrop-filter: blur(24px) saturate(145%);
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
   }
 
   .option-section {
-    background: #1C1C1E;
-    border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: none;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 48%, rgba(98,134,154,0.1) 100%),
+      rgba(46,50,59,0.46);
+    border: 1px solid rgba(230,238,250,0.22);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 18px 46px rgba(0,0,0,0.34);
+    backdrop-filter: blur(30px) saturate(145%);
+    -webkit-backdrop-filter: blur(30px) saturate(145%);
   }
 
   .section-toggle-under {
-    background: #2C2C2E;
+    background: rgba(57,61,70,0.34);
+    border: 1px solid rgba(230,238,250,0.12);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
   }
 
   .double-meat-label {
@@ -1911,12 +1928,32 @@ body {
   }
 
   .sheet-panel {
-    background: rgba(28,28,30,0.82);
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 52%, rgba(98,134,154,0.1) 100%),
+      rgba(38,43,52,0.62);
     color: #F2F2F7;
-    border-color: rgba(255,255,255,0.12);
-    box-shadow: 0 -2px 32px rgba(0,0,0,0.5);
-    backdrop-filter: blur(40px) saturate(160%);
-    -webkit-backdrop-filter: blur(40px) saturate(160%);
+    border-color: rgba(230,238,250,0.22);
+    box-shadow: 0 -18px 52px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.16);
+    backdrop-filter: blur(44px) saturate(165%);
+    -webkit-backdrop-filter: blur(44px) saturate(165%);
+  }
+
+  .result {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.04) 48%, rgba(136,151,110,0.12) 100%),
+      rgba(42,47,56,0.56);
+    border: 1px solid rgba(230,238,250,0.24);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 18px 52px rgba(0,0,0,0.4);
+    backdrop-filter: blur(32px) saturate(150%);
+    -webkit-backdrop-filter: blur(32px) saturate(150%);
+  }
+
+  .picker-field:hover,
+  .icon-symbol-btn:hover,
+  .reset-btn:hover,
+  .result-copy-btn:hover {
+    border-color: rgba(238,245,255,0.34);
+    background-color: rgba(78,84,96,0.5);
   }
 
   .sheet-grabber {
