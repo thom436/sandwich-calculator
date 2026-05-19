@@ -132,6 +132,7 @@ const RECENT_COUNT_KEYS = {
   sauce: "recent_count_sauce"
 }
 const SWIPE_HINT_KEYS = {
+  main: "swipe_hint_seen_main",
   addon: "swipe_hint_seen_addon",
   sauce: "swipe_hint_seen_sauce"
 }
@@ -199,11 +200,6 @@ function escapeHtml(str){
     .replace(/'/g, "&#39;")
 }
 
-function shouldBreakBilingualLine(zh, en){
-  if(!zh || !en) return false
-  return (zh.length + en.length >= 24) || en.length >= 17
-}
-
 function shouldBreakModalBilingualLine(zh, en){
   if(!zh || !en) return false
   return (zh.length + en.length >= 30) || en.length >= 22
@@ -211,18 +207,12 @@ function shouldBreakModalBilingualLine(zh, en){
 
 function setBilingualPickerText(el, zh, en){
   if(!el) return
+  el.classList.remove("picker-field--bilingual-break")
   if(!en){
-    el.classList.remove("picker-field--bilingual-break")
     el.textContent = zh || ""
     return
   }
-  if(shouldBreakBilingualLine(zh, en)){
-    el.classList.add("picker-field--bilingual-break")
-    el.innerHTML = `<span class="picker-zh-line">${escapeHtml(zh)}</span><span class="picker-en-break">${escapeHtml(en)}</span>`
-    return
-  }
-  el.classList.remove("picker-field--bilingual-break")
-  el.innerHTML = `<span class="picker-zh-inline">${escapeHtml(zh)}</span> <span class="picker-en-inline">${escapeHtml(en)}</span>`
+  el.innerHTML = `<span class="picker-bilingual"><span class="picker-zh-inline">${escapeHtml(zh)}</span> <span class="picker-en-inline">${escapeHtml(en)}</span></span>`
 }
 
 function buildGroups(seedGroups, allItems, extraGroupName = "其他"){
@@ -264,15 +254,15 @@ function getPer100KcalText(protein, cal){
   return `${((protein / cal) * 100).toFixed(1)}g/100kcal`
 }
 
-/** Modal list meta: kcal, then protein, then g/100kcal efficiency. */
+/** Modal list meta: kcal / protein on one line; g/100kcal efficiency on second when present. */
 function formatModalNutritionMetaHtml(cal, protein){
-  const lines = [`${formatKcal(cal)} kcal`]
+  let html = `${formatKcal(cal)} kcal`
   if(protein != null && !Number.isNaN(protein)){
-    lines.push(`<span class="item-protein">${formatProtein(protein)} g</span>`)
+    html += ` / <span class="item-protein">${formatProtein(protein)} g</span>`
     const efficiency = getPer100KcalText(protein, cal)
-    if(efficiency) lines.push(`<span class="item-efficiency">${efficiency}</span>`)
+    if(efficiency) html += `<br><span class="item-efficiency">${efficiency}</span>`
   }
-  return lines.join("<br>")
+  return html
 }
 
 function formatBreakdownNutritionLine(label, item){
@@ -280,7 +270,7 @@ function formatBreakdownNutritionLine(label, item){
   if(item.protein != null && !Number.isNaN(item.protein)){
     parts.push(`${formatProtein(item.protein)} g`)
   }
-  return `${label}: ${parts.join(" · ")}`
+  return `${label}: ${parts.join(" / ")}`
 }
 
 function setBilingualModalTitle(el, zh, en){
@@ -587,8 +577,12 @@ function attachSwipeToReveal(row, onSwipeAction, canSwipe){
   let startY = 0
   let currentX = 0
   let lastTranslate = 0
+  let lastVelocityX = 0
+  let lastSampleX = 0
+  let lastSampleTime = 0
   let isSwiping = false
   let pointerDown = false
+  let activeTouchId = null
   let revealWidth = 92
   let maxDrag = 132
   let deleteThreshold = 124
@@ -598,8 +592,23 @@ function attachSwipeToReveal(row, onSwipeAction, canSwipe){
   let settleThreshold = 54
   let rowWidth = 0
 
+  const FLING_DELETE_V = -0.45
+  const FLING_OPEN_V = -0.28
+  const FLING_CLOSE_V = 0.22
+
+  const applySwipeResistance = (translateX)=>{
+    if(translateX > 0){
+      return translateX * 0.32
+    }
+    const minX = -(rowWidth + 20)
+    if(translateX < minX){
+      return minX - (minX - translateX) * 0.24
+    }
+    return translateX
+  }
+
   const setSwipeVisual = (translateX)=>{
-    const next = Math.max(-(rowWidth + 20), Math.min(0, translateX))
+    const next = applySwipeResistance(translateX)
     lastTranslate = next
     picker.style.transform = `translateX(${next}px)`
     const drag = Math.abs(next)
@@ -681,10 +690,48 @@ function attachSwipeToReveal(row, onSwipeAction, canSwipe){
     const baseOffset = row.classList.contains("swiped") ? -revealWidth : 0
     const next = baseOffset + diffX
     setSwipeVisual(next)
+
+    const now = Date.now()
+    const dt = Math.max(1, now - lastSampleTime)
+    lastVelocityX = (clientX - lastSampleX) / dt
+    lastSampleX = clientX
+    lastSampleTime = now
     return true
   }
 
-  const onEnd = ()=>{
+  const detachDocumentTouch = ()=>{
+    document.removeEventListener("touchmove", onDocumentTouchMove)
+    document.removeEventListener("touchend", onDocumentTouchEnd)
+    document.removeEventListener("touchcancel", onDocumentTouchCancel)
+    activeTouchId = null
+  }
+
+  const onDocumentTouchMove = (e)=>{
+    if(activeTouchId === null) return
+    const touch = Array.from(e.touches).find(t => t.identifier === activeTouchId)
+    if(!touch) return
+    const moved = onMove(touch.clientX, touch.clientY)
+    if(moved) e.preventDefault()
+  }
+
+  const onDocumentTouchEnd = (e)=>{
+    if(activeTouchId === null) return
+    const ended = Array.from(e.changedTouches).find(t => t.identifier === activeTouchId)
+    if(!ended) return
+    detachDocumentTouch()
+    onEnd(lastVelocityX)
+  }
+
+  const onDocumentTouchCancel = ()=>{
+    if(activeTouchId === null) return
+    detachDocumentTouch()
+    pointerDown = false
+    row.classList.remove("swipe-dragging")
+    document.body.classList.remove("swipe-dragging")
+    closeSwipeRow(row)
+  }
+
+  const onEnd = (velocityX = 0)=>{
     if(!pointerDown) return
     pointerDown = false
     row.classList.remove("swipe-dragging")
@@ -697,8 +744,12 @@ function attachSwipeToReveal(row, onSwipeAction, canSwipe){
     suppressPickerTapUntil = Date.now() + 280
 
     const dragDistance = Math.abs(lastTranslate)
+    const wasOpen = row.classList.contains("swiped")
+    const deleteByDistance = dragDistance >= deleteThreshold
+    const deleteByFling = velocityX <= FLING_DELETE_V && dragDistance >= 24
+    const commitDelete = deleteByDistance || deleteByFling
 
-    if(dragDistance >= deleteThreshold){
+    if(commitDelete){
       if(hintType){
         markSwipeHintSeen(hintType)
         updateSwipeHints()
@@ -710,7 +761,19 @@ function attachSwipeToReveal(row, onSwipeAction, canSwipe){
       return
     }
 
-    if(dragDistance >= settleThreshold){
+    const openByDistance = dragDistance >= settleThreshold
+    const openByFling = velocityX <= FLING_OPEN_V && dragDistance >= 18
+    const shouldSnapOpen = openByDistance || openByFling
+
+    const closeByDistance = dragDistance < settleThreshold * 0.72
+    const closeByFling = velocityX >= FLING_CLOSE_V && dragDistance < settleThreshold
+
+    if(wasOpen && (closeByFling || closeByDistance)){
+      closeSwipeRow(row)
+      return
+    }
+
+    if(shouldSnapOpen){
       if(hintType){
         markSwipeHintSeen(hintType)
         updateSwipeHints()
@@ -723,21 +786,20 @@ function attachSwipeToReveal(row, onSwipeAction, canSwipe){
   }
 
   row.addEventListener("touchstart", (e)=>{
-    onStart(e.touches[0].clientX, e.touches[0].clientY)
+    const touch = e.touches[0]
+    if(!touch) return
+    const started = onStart(touch.clientX, touch.clientY)
+    if(!started) return
+
+    activeTouchId = touch.identifier
+    lastVelocityX = 0
+    lastSampleX = touch.clientX
+    lastSampleTime = Date.now()
+
+    document.addEventListener("touchmove", onDocumentTouchMove, { passive: false })
+    document.addEventListener("touchend", onDocumentTouchEnd)
+    document.addEventListener("touchcancel", onDocumentTouchCancel)
   }, { passive: true })
-
-  row.addEventListener("touchmove", (e)=>{
-    const moved = onMove(e.touches[0].clientX, e.touches[0].clientY)
-    if(moved) e.preventDefault()
-  }, { passive: false })
-
-  row.addEventListener("touchend", onEnd)
-  row.addEventListener("touchcancel", ()=>{
-    pointerDown = false
-    row.classList.remove("swipe-dragging")
-    document.body.classList.remove("swipe-dragging")
-    closeSwipeRow(row)
-  })
 
   row.addEventListener("mousedown", (e)=>{
     if(e.button !== 0) return
@@ -827,12 +889,20 @@ function ensureMainSwipeAction(){
   actionBtn.type = "button"
   actionBtn.dataset.role = "swipe-action"
   actionBtn.className = "swipe-clear-btn"
-  actionBtn.textContent = "Clear"
+  actionBtn.textContent = "Delete"
+  actionBtn.setAttribute("aria-label", "Delete main selection")
   row.appendChild(actionBtn)
 
   attachSwipeToReveal(row, ()=>{
     clearMainSection()
   }, ()=> !!document.getElementById("main")?.value)
+}
+
+function maybePeekMainSwipeHint(){
+  const row = document.getElementById("mainPickerRow")
+  if(row && document.getElementById("main")?.value){
+    maybePeekHint(row, "main")
+  }
 }
 
 function openMainPicker(defaultGroup = ""){
@@ -946,6 +1016,7 @@ function renderMainItems(group){
       saveRecentItem("main", name)
       updateMainPickerLabel()
       flashPickerSelection(document.getElementById("mainPicker"))
+      maybePeekMainSwipeHint()
       closeModal("mainModal")
       calc()
     }
@@ -974,6 +1045,7 @@ function renderMainItems(group){
         saveRecentItem("main", name)
         updateMainPickerLabel()
         flashPickerSelection(document.getElementById("mainPicker"))
+        maybePeekMainSwipeHint()
         closeModal("mainModal")
         calc()
       }
@@ -1523,7 +1595,7 @@ function createAddonSelect(removable = true){
     actionBtn.type = "button"
     actionBtn.dataset.role = "swipe-action"
     actionBtn.className = "swipe-clear-btn"
-    actionBtn.textContent = "Clear"
+    actionBtn.textContent = "Delete"
     wrapper.appendChild(actionBtn)
     attachSwipeToReveal(wrapper, ()=>{
       removeRowWithAnimation(wrapper, ()=>{
@@ -1833,7 +1905,7 @@ function createSauceSelect(){
   actionBtn.type = "button"
   actionBtn.dataset.role = "swipe-action"
   actionBtn.className = "swipe-clear-btn"
-  actionBtn.textContent = "Clear"
+  actionBtn.textContent = "Delete"
   wrapper.appendChild(actionBtn)
   attachSwipeToReveal(wrapper, ()=>{
     removeRowWithAnimation(wrapper, ()=>{
@@ -1911,7 +1983,7 @@ function ensureSauce1SwipeAction(){
   actionBtn.type = "button"
   actionBtn.dataset.role = "swipe-action"
   actionBtn.className = "swipe-clear-btn"
-  actionBtn.textContent = "Clear"
+  actionBtn.textContent = "Delete"
   row.appendChild(actionBtn)
 
   attachSwipeToReveal(row, ()=>{
@@ -1973,14 +2045,18 @@ function showResultStats(summaryText, breakdownHtml){
         <path fill="currentColor" d="M6.2 6.5h6.9L17 10.4v9.5c0 1.44-1.16 2.6-2.6 2.6H6.2A2.6 2.6 0 0 1 3.6 20V9.1c0-1.43 1.17-2.6 2.6-2.6Zm5.7 2.2v2.7c0 .88.72 1.6 1.6 1.6h2.3L11.9 8.7Z"/>
       </svg>
     </span>
-    <span class="copy-icon-check" aria-hidden="true">✓</span>
+    <span class="copy-icon-check" aria-hidden="true">
+      <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M9.55 17.35 4.4 12.2l1.5-1.5 3.65 3.65 9.05-9.05 1.5 1.5-10.55 10.55Z"/>
+      </svg>
+    </span>
   </button>
 </div>
 <div style="font-size:26px;line-height:1.12;color:#34c759;font-weight:700;margin-top:8px;"><span id="proVal">0</span> g protein</div>
-<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;">
-  <div id="summaryLine" style="font-size:12px;color:#6e6e73;line-height:1.45;letter-spacing:0.01em;flex:1;"></div>
-  <button id="detailToggleBtn" class="result-detail-btn" type="button" aria-label="詳細 Details" title="詳細 Details" aria-expanded="false" onclick="toggleResultDetails()">
-    <span class="result-detail-icon">⌄</span>
+<div class="result-summary-row">
+  <button id="detailToggleBtn" class="result-detail-btn result-summary-toggle" type="button" aria-label="詳細 Details" title="詳細 Details" aria-expanded="false" onclick="toggleResultDetails()">
+    <span id="summaryLine" class="result-summary-text"></span>
+    <span class="result-detail-icon" aria-hidden="true">⌄</span>
   </button>
 </div>
 <div id="breakdownWrap" style="display:none;">
@@ -2022,6 +2098,7 @@ function bindResultCardTap(){
   resultEl.addEventListener("click", (e)=>{
     if(resultMode !== "stats") return
     if(e.target.closest("#copyShareBtn")) return
+    if(e.target.closest("#detailToggleBtn")) return
     toggleResultDetails()
   })
 }
@@ -2054,13 +2131,19 @@ function copyResultSummary(){
   if(!lastShareText) return
 
   const btn = document.getElementById("copyShareBtn")
+  const copiedAria = "已複製 Copied"
+  const defaultAria = "複製結果 Copy result"
   const setCopiedLabel = ()=>{
     if(!btn) return
     btn.classList.add("copied")
+    btn.setAttribute("aria-label", copiedAria)
+    btn.setAttribute("title", copiedAria)
     if(copyShareResetTimer) clearTimeout(copyShareResetTimer)
     copyShareResetTimer = setTimeout(()=>{
       btn.classList.remove("copied")
-    }, 1200)
+      btn.setAttribute("aria-label", defaultAria)
+      btn.setAttribute("title", defaultAria)
+    }, 1800)
   }
 
   if(navigator.clipboard && window.isSecureContext){
@@ -2158,7 +2241,7 @@ const mainPortions = isDoubleMeat ? 2 : 1
 const totalEfficiency = getPer100KcalText(total.protein, total.cal)
 const summaryText = [
   `主餐 ${mainPortions} 份 + 加料 ${selectedAddonNames.length} 份 + 醬料 ${selectedSauceCount} 種`,
-  `${formatKcal(total.cal)} kcal · ${formatProtein(total.protein)} g${totalEfficiency ? ` · ${totalEfficiency}` : ""}`,
+  `${formatKcal(total.cal)} kcal / ${formatProtein(total.protein)} g${totalEfficiency ? ` · ${totalEfficiency}` : ""}`,
 ].join(" · ")
 showResultStats(summaryText, breakdown.join("<br>"))
 const mainChanged = main !== lastMainForFeedback
@@ -2219,6 +2302,14 @@ lastMainForFeedback = main
   updateResultVisibility()
 }
 
+const SHEET_DESKTOP_MQ = window.matchMedia("(min-width: 940px)")
+
+function sheetPanelTransform(translateY) {
+  const centerX = SHEET_DESKTOP_MQ.matches ? "translateX(-50%)" : ""
+  if (!translateY) return centerX
+  return centerX ? `${centerX} ${translateY}` : translateY
+}
+
 function attachSwipeToDismiss(panel, closeFn) {
   if (!panel || panel.dataset.swipeDismissReady === "1") return
   panel.dataset.swipeDismissReady = "1"
@@ -2255,7 +2346,7 @@ function attachSwipeToDismiss(panel, closeFn) {
         else              return
       }
       if (isDragging) e.preventDefault()
-      panel.style.transform = `translateY(${Math.max(0, dy)}px)`
+      panel.style.transform = sheetPanelTransform(`translateY(${Math.max(0, dy)}px)`)
     }
 
     function finish() {
@@ -2267,7 +2358,7 @@ function attachSwipeToDismiss(panel, closeFn) {
       const vel = dy / Math.max(1, Date.now() - startTime)
       panel.style.transition = "transform 0.26s cubic-bezier(.22,.61,.36,1)"
       if (isDragging && (dy > THRESHOLD || vel > VELOCITY)) {
-        panel.style.transform = "translateY(110%)"
+        panel.style.transform = sheetPanelTransform("translateY(110%)")
         haptic()
         setTimeout(() => { panel.style.transform = ""; panel.style.transition = ""; closeFn() }, 260)
       } else {
@@ -2295,14 +2386,14 @@ function attachSwipeToDismiss(panel, closeFn) {
       const sy = e.clientY
       let cy = e.clientY
       panel.style.transition = "none"
-      const mm = (ev) => { cy = ev.clientY; const dy = cy - sy; if (dy > 0) panel.style.transform = `translateY(${dy}px)` }
+      const mm = (ev) => { cy = ev.clientY; const dy = cy - sy; if (dy > 0) panel.style.transform = sheetPanelTransform(`translateY(${dy}px)`) }
       const mu = () => {
         document.removeEventListener("mousemove", mm)
         document.removeEventListener("mouseup",   mu)
         const dy = cy - sy
         panel.style.transition = "transform 0.26s cubic-bezier(.22,.61,.36,1)"
         if (dy > THRESHOLD) {
-          panel.style.transform = "translateY(110%)"
+          panel.style.transform = sheetPanelTransform("translateY(110%)")
           setTimeout(() => { panel.style.transform = ""; panel.style.transition = ""; closeFn() }, 260)
         } else {
           panel.style.transform = ""
