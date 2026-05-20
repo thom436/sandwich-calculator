@@ -137,36 +137,67 @@ const SWIPE_HINT_KEYS = {
   sauce: "swipe_hint_seen_sauce"
 }
 const MODAL_IDS = ["mainModal", "addonModal", "sauceModal", "quickSearchModal"]
+const MODAL_ANIM_MS = 340
 
 function setModalOpenState(){
-  const hasOpenModal = MODAL_IDS.some(id => document.getElementById(id)?.style.display === "block")
+  const hasOpenModal = MODAL_IDS.some(id => {
+    const modal = document.getElementById(id)
+    return modal && (modal.classList.contains("is-open") || modal.style.display === "block")
+  })
   document.body.classList.toggle("modal-open", hasOpenModal)
 }
 
 function openModal(id, focusEl = null){
+  MODAL_IDS.forEach((mid)=>{
+    if(mid !== id) closeModal(mid, { immediate: true })
+  })
+
   const modal = document.getElementById(id)
   if(!modal) return
   modal.style.display = "block"
+  void modal.offsetWidth
+  requestAnimationFrame(()=>{
+    modal.classList.add("is-open")
+  })
   setModalOpenState()
+
   const panel = modal.querySelector(".sheet-panel")
+  if(panel) panel.style.transform = ""
+
   setTimeout(()=>{
     if(focusEl){
       focusEl.focus()
     } else if(panel) {
       panel.focus()
     }
-  }, 10)
+  }, MODAL_ANIM_MS * 0.45)
 }
 
-function closeModal(id){
+function closeModal(id, options = {}){
   const modal = document.getElementById(id)
-  if(!modal) return
-  modal.style.display = "none"
-  setModalOpenState()
+  if(!modal || modal.style.display === "none") return
+
+  const panel = modal.querySelector(".sheet-panel")
+  if(panel && !options.immediate) panel.style.transform = ""
+
+  if(options.immediate){
+    modal.classList.remove("is-open")
+    modal.style.display = "none"
+    setModalOpenState()
+    return
+  }
+
+  modal.classList.remove("is-open")
+  setTimeout(()=>{
+    if(!modal.classList.contains("is-open")){
+      modal.style.display = "none"
+      setModalOpenState()
+    }
+  }, MODAL_ANIM_MS)
 }
 
-function closeAllModals(){
-  MODAL_IDS.forEach(closeModal)
+function closeAllModals(options = {}){
+  MODAL_IDS.forEach(id => closeModal(id, options))
 }
 
 function makeKeyboardClickable(el){
@@ -2031,15 +2062,26 @@ let lastMainForFeedback = "";
 let saucePickerTarget = "sauce1"
 
 function animateNumber(el, start, end, decimals=1, duration=300) {
+  if(!el) return
   let startTime = null;
   function step(timestamp) {
     if (!startTime) startTime = timestamp;
     const progress = Math.min((timestamp - startTime) / duration, 1);
-    const value = start + (end - start) * progress;
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const value = start + (end - start) * eased;
     el.textContent = value.toFixed(decimals);
     if (progress < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
+}
+
+function bumpResultStat(el){
+  if(!el) return
+  const row = el.closest(".result-hero-stat")
+  if(!row) return
+  row.classList.remove("stat-bump")
+  void row.offsetWidth
+  row.classList.add("stat-bump")
 }
 
 function showResultHint(){
@@ -2055,7 +2097,7 @@ function showResultStats(summaryText, breakdownHtml, options = {}){
   if(resultMode !== "stats"){
     resultEl.innerHTML =
 `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-  <div style="font-size:20px;line-height:1.15;font-weight:600;">🔥 <span id="calVal">0.0</span> kcal</div>
+  <div class="result-hero-stat result-hero-stat--kcal">🔥 <span id="calVal">0.0</span> kcal</div>
   <button id="copyShareBtn" class="result-copy-btn" type="button" aria-label="複製結果 Copy result" title="複製結果 Copy result" onclick="copyResultSummary()">
     <span class="copy-icon-stack" aria-hidden="true">
       <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
@@ -2070,15 +2112,17 @@ function showResultStats(summaryText, breakdownHtml, options = {}){
     </span>
   </button>
 </div>
-<div style="font-size:26px;line-height:1.12;color:#34c759;font-weight:700;margin-top:8px;"><span id="proVal">0</span> g protein</div>
+<div class="result-hero-stat result-hero-stat--protein"><span id="proVal">0</span> g protein</div>
 <div class="result-summary-row">
   <button id="detailToggleBtn" class="result-detail-btn result-summary-toggle" type="button" aria-label="詳細 Details" title="詳細 Details" aria-expanded="false" onclick="toggleResultDetails()">
     <span id="summaryLine" class="result-summary-text"></span>
     <span class="result-detail-icon" aria-hidden="true">⌄</span>
   </button>
 </div>
-<div id="breakdownWrap" style="display:none;">
-  <div id="breakdownLine" class="result-breakdown-line"></div>
+<div id="breakdownWrap" class="result-breakdown-wrap">
+  <div class="result-breakdown-inner">
+    <div id="breakdownLine" class="result-breakdown-line"></div>
+  </div>
 </div>`
     resultMode = "stats"
     resultDetailsExpanded = false
@@ -2100,7 +2144,7 @@ function showResultStats(summaryText, breakdownHtml, options = {}){
     detailBtn.classList.toggle("expanded", resultDetailsExpanded)
     detailBtn.setAttribute("aria-expanded", resultDetailsExpanded ? "true" : "false")
   }
-  if(breakdownWrap) breakdownWrap.style.display = resultDetailsExpanded ? "block" : "none"
+  if(breakdownWrap) breakdownWrap.classList.toggle("is-expanded", resultDetailsExpanded)
 }
 
 function toggleResultDetails(){
@@ -2111,7 +2155,7 @@ function toggleResultDetails(){
     detailBtn.classList.toggle("expanded", resultDetailsExpanded)
     detailBtn.setAttribute("aria-expanded", resultDetailsExpanded ? "true" : "false")
   }
-  if(breakdownWrap) breakdownWrap.style.display = resultDetailsExpanded ? "block" : "none"
+  if(breakdownWrap) breakdownWrap.classList.toggle("is-expanded", resultDetailsExpanded)
 }
 
 function bindResultCardTap(){
@@ -2197,7 +2241,7 @@ let breakdown = []
 const resultEl = document.getElementById("result")
 
 let main = document.getElementById("main").value
-if(!main){
+  if(!main){
   resultEnabled = false
   resultMode = ""
   resultDetailsExpanded = false
@@ -2205,11 +2249,9 @@ if(!main){
   lastCal = 0
   lastProtein = 0
   if(resultEl){
-    resultEl.classList.remove("active")
-    resultEl.classList.remove("pop")
-    resultEl.style.opacity = "0"
-    resultEl.style.visibility = "hidden"
+    resultEl.classList.remove("is-shown", "pop")
   }
+  updateResultVisibility()
   return
 }
 
@@ -2305,8 +2347,13 @@ const calEl = document.getElementById("calVal")
 const proEl = document.getElementById("proVal")
 
 const calDecimals = (Math.round(total.cal * 10) % 10 === 0) ? 0 : 1
+const calChanged = Math.abs(total.cal - lastCal) > 0.05
+const proteinChanged = Math.abs(total.protein - lastProtein) > 0.05
+
 animateNumber(calEl, lastCal, total.cal, calDecimals)
 animateNumber(proEl, lastProtein, total.protein, 0)
+if(calChanged) bumpResultStat(calEl)
+if(proteinChanged) bumpResultStat(proEl)
 
 lastCal = total.cal
 lastProtein = total.protein
@@ -2314,11 +2361,7 @@ lastMainForFeedback = main
 
   resultEnabled = true
 
-  // Ensure result is visible when calculated
-  resultEl.style.visibility = "visible"
-  resultEl.classList.add("active")
-  setTimeout(() => resultEl.classList.remove("active"), 600)
-  if(mainChanged){
+  if(mainChanged || !resultEl.classList.contains("is-shown")){
     triggerResultPop()
     if (navigator.vibrate) navigator.vibrate(5)
   }
@@ -2456,17 +2499,13 @@ function updateResultVisibility(){
   const shell = document.querySelector(".app-shell")
 
   if(!resultEnabled){
-    resultEl.style.opacity = "0"
-    resultEl.style.visibility = "hidden"
-    resultEl.style.pointerEvents = "none"
+    resultEl?.classList.remove("is-shown")
     shell?.classList.remove("has-result")
     document.body.classList.remove("has-result")
     return
   }
 
-  resultEl.style.opacity = "1"
-  resultEl.style.visibility = "visible"
-  resultEl.style.pointerEvents = "auto"
+  resultEl?.classList.add("is-shown")
   shell?.classList.add("has-result")
   document.body.classList.add("has-result")
 }
@@ -2519,7 +2558,7 @@ function resetAll(){
   resultDetailsExpanded = false
   lastMainForFeedback = ""
 
-  closeAllModals()
+  closeAllModals({ immediate: true })
 
   updateAddonUI()
   updateSectionClearButtons()
