@@ -251,18 +251,29 @@ function formatProtein(value){
 
 function getPer100KcalText(protein, cal){
   if(!cal) return ""
-  return `${((protein / cal) * 100).toFixed(1)}g/100kcal`
+  const per100 = (protein / cal) * 100
+  return `${formatProtein(per100)} g / 100 kcal`
 }
 
-/** Modal list meta: kcal / protein on one line; g/100kcal efficiency on second when present. */
+function formatKcalProteinText(cal, protein){
+  if(protein == null || Number.isNaN(protein)) return `${formatKcal(cal)} kcal`
+  return `${formatKcal(cal)} kcal · ${formatProtein(protein)} g`
+}
+
+/** Modal list meta: kcal · protein on one line; g / 100 kcal efficiency on second when present. */
 function formatModalNutritionMetaHtml(cal, protein){
-  let html = `${formatKcal(cal)} kcal`
-  if(protein != null && !Number.isNaN(protein)){
-    html += ` / <span class="item-protein">${formatProtein(protein)} g</span>`
-    const efficiency = getPer100KcalText(protein, cal)
-    if(efficiency) html += `<br><span class="item-efficiency">${efficiency}</span>`
-  }
+  if(protein == null || Number.isNaN(protein)) return `${formatKcal(cal)} kcal`
+  let html = `${formatKcal(cal)} kcal · <span class="item-protein">${formatProtein(protein)} g</span>`
+  const efficiency = getPer100KcalText(protein, cal)
+  if(efficiency) html += `<br><span class="item-efficiency">${efficiency}</span>`
   return html
+}
+
+function formatNutritionSummaryHtml(cal, protein){
+  const line1 = formatKcalProteinText(cal, protein)
+  const efficiency = getPer100KcalText(protein, cal)
+  if(efficiency) return `${line1}<br><span class="result-summary-efficiency">${efficiency}</span>`
+  return line1
 }
 
 function formatBreakdownNutritionLine(label, item){
@@ -270,7 +281,7 @@ function formatBreakdownNutritionLine(label, item){
   if(item.protein != null && !Number.isNaN(item.protein)){
     parts.push(`${formatProtein(item.protein)} g`)
   }
-  return `${label}: ${parts.join(" / ")}`
+  return `${label}: ${parts.join(" · ")}`
 }
 
 function setBilingualModalTitle(el, zh, en){
@@ -659,6 +670,9 @@ function attachSwipeToReveal(row, onSwipeAction, canSwipe){
     startX = clientX
     startY = clientY
     currentX = startX
+    lastSampleX = clientX
+    lastSampleTime = Date.now()
+    lastVelocityX = 0
     lastTranslate = row.classList.contains("swiped") ? -revealWidth : 0
     isSwiping = false
     pointerDown = true
@@ -831,6 +845,10 @@ const mainSeedGroups = {
   "雞肉系": ["照燒雞肉","鮮嫩雞柳","香烤雞肉","嫩切雞肉"],
   "豬肉冷切系": ["火腿","百味俱樂部","義大利經典","哈燒起司總匯","墨西哥手撕豬"],
   "海鮮蛋素食": ["鮪魚","蛋沙拉","鷹嘴豆泥餅","素食蔬菜"]
+}
+
+const addonGroupDisplayLabels = {
+  "起司蛋配料": "起司蛋"
 }
 
 const addonSeedGroups = {
@@ -1134,7 +1152,7 @@ function openAddonPicker(defaultGroup = "", targetRow = null){
   groupNames.forEach((g)=>{
     const btn = document.createElement("button")
     btn.type = "button"
-    btn.textContent = g
+    btn.textContent = addonGroupDisplayLabels[g] ?? g
     styleModalCategoryButton(btn, g===selectedGroup)
 
     btn.onclick = ()=>{
@@ -2032,7 +2050,7 @@ function showResultHint(){
   }
 }
 
-function showResultStats(summaryText, breakdownHtml){
+function showResultStats(summaryText, breakdownHtml, options = {}){
   const resultEl = document.getElementById("result")
   if(resultMode !== "stats"){
     resultEl.innerHTML =
@@ -2070,7 +2088,13 @@ function showResultStats(summaryText, breakdownHtml){
   const breakdownEl = document.getElementById("breakdownLine")
   const detailBtn = document.getElementById("detailToggleBtn")
   const breakdownWrap = document.getElementById("breakdownWrap")
-  if(summaryEl) summaryEl.textContent = summaryText
+  if(summaryEl){
+    if(options.summaryHtml){
+      summaryEl.innerHTML = summaryText
+    } else {
+      summaryEl.textContent = summaryText
+    }
+  }
   if(breakdownEl) breakdownEl.innerHTML = breakdownHtml
   if(detailBtn){
     detailBtn.classList.toggle("expanded", resultDetailsExpanded)
@@ -2239,11 +2263,10 @@ const selectedSauceCount = (sauce1 ? 1 : 0) + (sauce2 ? 1 : 0)
 const isDoubleMeat = document.getElementById("double").checked
 const mainPortions = isDoubleMeat ? 2 : 1
 const totalEfficiency = getPer100KcalText(total.protein, total.cal)
-const summaryText = [
-  `主餐 ${mainPortions} 份 + 加料 ${selectedAddonNames.length} 份 + 醬料 ${selectedSauceCount} 種`,
-  `${formatKcal(total.cal)} kcal / ${formatProtein(total.protein)} g${totalEfficiency ? ` · ${totalEfficiency}` : ""}`,
-].join(" · ")
-showResultStats(summaryText, breakdown.join("<br>"))
+const countsSummary = `主餐 ${mainPortions} 份 + 加料 ${selectedAddonNames.length} 份 + 醬料 ${selectedSauceCount} 種`
+const nutritionSummaryHtml = formatNutritionSummaryHtml(total.cal, total.protein)
+const summaryHtml = `${escapeHtml(countsSummary)} · ${nutritionSummaryHtml}`
+showResultStats(summaryHtml, breakdown.join("<br>"), { summaryHtml: true })
 const mainChanged = main !== lastMainForFeedback
 
 const sauceShareText = []
